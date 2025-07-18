@@ -74,35 +74,44 @@ class CandleConfig():
         # Time convertions
         self.width_ms = int(width_ms)
 
-        self.date_from = datetime.strptime( \
+        convert_time = lambda time, old_format, new_format: \
+            datetime.strptime(time, old_format).strftime(new_format)
+
+        self.date_from = convert_time( \
             date_from,
-            DATE_FORMAT_INPUT_PYTHON
-        ).strftime(DATE_FORMAT_PYTHON)
+            DATE_FORMAT_INPUT_PYTHON,
+            DATE_FORMAT_PYTHON
+        )
 
-        self.date_to = datetime.strptime( \
+        self.date_to = convert_time( \
             date_to,
-            DATE_FORMAT_INPUT_PYTHON
-        ).strftime(DATE_FORMAT_PYTHON)
+            DATE_FORMAT_INPUT_PYTHON,
+            DATE_FORMAT_PYTHON
+        )
 
-        self.time_from = datetime.strptime( \
+        self.time_from = convert_time( \
             time_from,
-            HHMM_FORMAT_INPUT_PYTHON
-        ).strftime(HHMM_FORMAT_PYTHON)
+            HHMM_FORMAT_INPUT_PYTHON,
+            HHMM_FORMAT_PYTHON
+        )
 
-        self.time_to = datetime.strptime( \
+        self.time_to = convert_time( \
             time_to,
-            HHMM_FORMAT_INPUT_PYTHON
-        ).strftime(HHMM_FORMAT_PYTHON)
+            HHMM_FORMAT_INPUT_PYTHON,
+            HHMM_FORMAT_PYTHON
+        )
 
-        self.timestamp_to = datetime.strptime( \
+        self.timestamp_to = convert_time( \
             date_to + time_to,
-            DT_INPUT_PYTHON
-        ).strftime(TIMESTAMP_PYTHON)
+            DT_INPUT_PYTHON,
+            TIMESTAMP_PYTHON
+        )
 
-        self.timestamp_from = datetime.strptime( \
+        self.timestamp_from = convert_time( \
             date_from + time_from,
-            DT_INPUT_PYTHON
-        ).strftime(TIMESTAMP_PYTHON)
+            DT_INPUT_PYTHON,
+            TIMESTAMP_PYTHON
+        )
 
 
 class Config():
@@ -116,7 +125,7 @@ class Config():
         self.candle_config = CandleConfig(self.params)
         self.database_csv_path = args.get("database-csv")
         self.outdir = args.get("outdir")
-        self.clean_output_dir = args.get("clean-output-dir")
+        self.clean_output_dir = args.get("clean_output_dir")
 
     def _parse_xml_file(self, file) -> dict:
         if file == None:
@@ -273,9 +282,7 @@ def make_candles(config: Config):
 
     # Calculate candles (lazy calculations)
     candles = calculate_candles(trades, config.candle_config)
-    candles = candles.cache()
-    candles.printSchema()
-    candles.orderBy(F.col("SYMBOL")).show(truncate=False)
+
     # Calculation and saving
     save_candles(candles, config)
 
@@ -285,5 +292,5 @@ def make_candles(config: Config):
 if __name__ == "__main__":
     args = parse_args()
     config = Config(args)
-    print(config.candle_config)
+
     make_candles(config)

@@ -29,4 +29,4 @@ DATABASE_CSV=${SRC}/database-csv/trades.csv
 OUTDIR=${SRC}/output
 CLEAN="--clean-output-dir"
 
-DEF_ARGS=(${DATABASE_CSV} --config ${CONFIG_XML} --outdir ${OUTDIR})
+DEF_ARGS=(${DATABASE_CSV} --config ${CONFIG_XML} --outdir ${OUTDIR} ${CLEAN})
