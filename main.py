@@ -222,7 +222,7 @@ class Config():
             raise FileExistsError("Incorrect path to database: %s",
                                   self.database_csv_path)
 
-        logger.info("Config created successfuly")
+        logger.info("Config created successfully")
         logger.debug( \
             "Config parameters: candle_config=..., database_csv_path=%s, outdir=%s, clean_output_dir=%s, sort_by_moment=%s",
             self.database_csv_path,
@@ -422,6 +422,7 @@ def make_candles(config: Config):
     candles = calculate_candles(trades, config.candle_config)
 
     # Calculation and saving
+    logger.info("Start candle calculations")
     save_candles(candles, config)
 
     pass
