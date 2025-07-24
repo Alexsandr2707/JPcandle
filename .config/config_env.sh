@@ -25,8 +25,9 @@ INSTALLED_REQUIREMENTS=${CACHE}/requirements.txt.installed
 
 
 CONFIG_XML=${CONFIGS}/config.xml
-DATABASE_CSV=${SRC}/database-csv/trades.csv
+DATABASE_CSV=${SRC}/database-csv/input.csv
 OUTDIR=${SRC}/output
 CLEAN="--clean-output-dir"
+SORT="--sort-by-moment"
 
-DEF_ARGS=(${DATABASE_CSV} --config ${CONFIG_XML} --outdir ${OUTDIR} ${CLEAN})
+DEF_ARGS=(${DATABASE_CSV} --config ${CONFIG_XML} --outdir ${OUTDIR} ${CLEAN} ${SORT})

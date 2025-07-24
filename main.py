@@ -1,5 +1,6 @@
 import argparse
 
+import logging.handlers
 import multiprocessing
 from datetime import datetime
 
@@ -10,8 +11,65 @@ import pyspark.sql.functions as F
 import os
 import glob
 import shutil
+from pathlib import Path
 
 import xml.etree.ElementTree as ET
+
+import logging
+
+# Logging configuration
+DEF_LOG_DIR = "logs"
+DEF_LOG_FILE = "app.log"
+DEF_LOG_FILE_SIZE = 10 * 1024 * 1024  # 10Mb
+DEF_BACKUP_COUNT = 1
+DEF_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
+
+
+def setup_logger(log_dir: Path = Path(DEF_LOG_DIR)):
+    # Create log directoy
+    try:
+        log_dir.mkdir(exist_ok=True, parents=True)
+    except Exception as e:
+        print("Fatal error in creating log directory: %s", e)
+        raise
+
+    # Create log file and check on write access
+    try:
+        log_file = log_dir.joinpath(DEF_LOG_FILE)
+        with open(log_file, "w") as f:
+            f.write("Something")
+        os.remove(log_file)
+
+    except Exception as e:
+        print("Fatal error in creating log file: %s", e)
+        raise
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter(DEF_LOG_FORMAT)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+
+    file_handler = logging.handlers.RotatingFileHandler( \
+        log_file,
+        maxBytes=DEF_LOG_FILE_SIZE,
+        backupCount=DEF_BACKUP_COUNT,
+        encoding="utf-8"
+    )
+
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+logger = setup_logger()
 
 # Time formats
 # suffix SPARK/PYTHON indicate which library these formats are for
@@ -40,17 +98,30 @@ NUM_CORES = multiprocessing.cpu_count()
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("database-csv",
-                        help="Path database written in CSV file (required)")
-    parser.add_argument("--config", help="Run cofiguration")
-    parser.add_argument("--outdir",
-                        default="./output",
-                        help="Directory for results")
-    parser.add_argument("--clean-output-dir",
-                        action="store_true",
-                        help="Remove and create outdir")
-    return vars(parser.parse_args())
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("database-csv",
+                            help="Path database written in CSV file (required)")
+        parser.add_argument("--config", help="Run cofiguration")
+        parser.add_argument("--outdir",
+                            default="./output",
+                            help="Directory for results")
+        parser.add_argument("--clean-output-dir",
+                            action="store_true",
+                            help="Remove and create outdir")
+        parser.add_argument("--sort-by-moment",
+                            action="store_true",
+                            help="Sort candles in files by time begin")
+        args_dict = vars(parser.parse_args())
+
+    except Exception as e:
+        logger.exception("Error parsing command line arguments")
+        raise
+
+    logger.info("Command line args parsed successfully")
+    logger.debug("Command line args: %s", args_dict)
+
+    return args_dict
 
 
 class CandleConfig():
@@ -64,53 +135,69 @@ class CandleConfig():
             time_from="1000",  # HHmm
             time_to="1800"):  # HHmm
 
-        width_ms = str(params.get("candle.width", width_ms))
-        date_from = str(params.get("candle.date.from", date_from))
-        date_to = str(params.get("candle.date.to", date_to))
-        time_from = str(params.get("candle.time.from", time_from))
-        time_to = str(params.get("candle.time.to", time_to))
+        try:
+            width_ms = str(params.get("candle.width", width_ms))
+            date_from = str(params.get("candle.date.from", date_from))
+            date_to = str(params.get("candle.date.to", date_to))
+            time_from = str(params.get("candle.time.from", time_from))
+            time_to = str(params.get("candle.time.to", time_to))
 
-        # Need to add checks
-        # Time convertions
-        self.width_ms = int(width_ms)
+            # Need to add checks
+            # Time convertions
+            self.width_ms = int(width_ms)
 
-        convert_time = lambda time, old_format, new_format: \
-            datetime.strptime(time, old_format).strftime(new_format)
+            if self.width_ms <= 0:
+                raise ValueError("Width of candle <= 0")
 
-        self.date_from = convert_time( \
-            date_from,
-            DATE_FORMAT_INPUT_PYTHON,
-            DATE_FORMAT_PYTHON
-        )
+            convert_time = lambda time, old_format, new_format: \
+                datetime.strptime(time, old_format).strftime(new_format)
 
-        self.date_to = convert_time( \
-            date_to,
-            DATE_FORMAT_INPUT_PYTHON,
-            DATE_FORMAT_PYTHON
-        )
+            self.date_from = convert_time( \
+                date_from,
+                DATE_FORMAT_INPUT_PYTHON,
+                DATE_FORMAT_PYTHON
+            )
 
-        self.time_from = convert_time( \
-            time_from,
-            HHMM_FORMAT_INPUT_PYTHON,
-            HHMM_FORMAT_PYTHON
-        )
+            self.date_to = convert_time( \
+                date_to,
+                DATE_FORMAT_INPUT_PYTHON,
+                DATE_FORMAT_PYTHON
+            )
 
-        self.time_to = convert_time( \
-            time_to,
-            HHMM_FORMAT_INPUT_PYTHON,
-            HHMM_FORMAT_PYTHON
-        )
+            self.time_from = convert_time( \
+                time_from,
+                HHMM_FORMAT_INPUT_PYTHON,
+                HHMM_FORMAT_PYTHON
+            )
 
-        self.timestamp_to = convert_time( \
-            date_to + time_to,
-            DT_INPUT_PYTHON,
-            TIMESTAMP_PYTHON
-        )
+            self.time_to = convert_time( \
+                time_to,
+                HHMM_FORMAT_INPUT_PYTHON,
+                HHMM_FORMAT_PYTHON
+            )
 
-        self.timestamp_from = convert_time( \
-            date_from + time_from,
-            DT_INPUT_PYTHON,
-            TIMESTAMP_PYTHON
+            self.timestamp_to = convert_time( \
+                date_to + time_to,
+                DT_INPUT_PYTHON,
+                TIMESTAMP_PYTHON
+            )
+
+            self.timestamp_from = convert_time( \
+                date_from + time_from,
+                DT_INPUT_PYTHON,
+                TIMESTAMP_PYTHON
+            )
+
+        except Exception as e:
+            logger.exception("Error in candle parameters processing\n   %s", e)
+            raise
+
+        logger.info("Candle parameters processed successfully")
+        logger.debug( \
+            "Candle parameters: width_ms=%s, date_from=%s, date_to=%s, time_from=%s, time_to=%s",
+            self.width_ms,
+            self.date_from, self.date_to,
+            self.time_from, self.time_to
         )
 
 
@@ -121,25 +208,65 @@ class Config():
         args: dict,
     ):
         self.config_xml_file = args.get("config")
-        self.params = self._parse_xml_file(self.config_xml_file)
-        self.candle_config = CandleConfig(self.params)
-        self.database_csv_path = args.get("database-csv")
-        self.outdir = args.get("outdir")
+        if not self.config_xml_file:
+            logger.warning("XML configuration file not specified")
+
+        params = self._parse_xml_file(self.config_xml_file)
+        self.candle_config = CandleConfig(params)
+        self.database_csv_path = Path(args.get("database-csv"))
+        self.outdir = Path(args.get("outdir"))
         self.clean_output_dir = args.get("clean_output_dir")
+        self.sort_by_moment = args.get("sort_by_moment")
+
+        if not self.database_csv_path.exists():
+            raise FileExistsError("Incorrect path to database: %s",
+                                  self.database_csv_path)
+
+        logger.info("Config created successfuly")
+        logger.debug( \
+            "Config parameters: candle_config=..., database_csv_path=%s, outdir=%s, clean_output_dir=%s, sort_by_moment=%s",
+            self.database_csv_path,
+            self.outdir,
+            self.clean_output_dir,
+            self.sort_by_moment
+        )
 
     def _parse_xml_file(self, file) -> dict:
         if file == None:
             return dict()
 
-        tree = ET.parse(file)
-        root = tree.getroot()
+        try:
+            tree = ET.parse(file)
+            root = tree.getroot()
 
-        config = {}
+            config = {}
 
-        for property in root:
-            name = property.find("name").text
-            config[name] = property.find("value").text
+            for property in root:
+                name = property.find("name").text
+                config[name] = property.find("value").text
+
+        except Exception as e:
+            logger.exception("XML configuration file parsing error")
+            raise
+
+        logger.info("XML configuration file parsed successfully")
+        logger.debug("XML configuration file parameters: %s", config)
         return config
+
+
+def config_spark_session() -> SparkSession:
+    # Config SparkSession
+    try:
+        spark = SparkSession.builder.appName("Candle Calculating").getOrCreate()
+
+        # PySpark version >= 3.0  does not allow parsing time written without delimiters
+        spark.conf.set("spark.sql.legacy.timeParserPolicy", "LEGACY")
+    except Exception as e:
+        logger.exception("Spark Configuration Error %s", e)
+        raise
+
+    logger.info("Spark configurated successfully")
+    return spark
 
 
 #
@@ -159,12 +286,12 @@ TRADE_SCHEMA = StructType([
 
 def get_trades_dataframe(spark: SparkSession, config: Config) -> DataFrame:
 
-    trades = spark.read.csv(config.database_csv_path,
+    trades = spark.read.csv(str(config.database_csv_path),
                             schema=TRADE_SCHEMA,
                             header=True,
                             timestampFormat=TIMESTAMP_INPUT_SPARK)
 
-    trades.repartition(NUM_CORES)
+    trades = trades.repartition(NUM_CORES)
 
     return trades
 
@@ -174,31 +301,32 @@ def calculate_candles(trades: DataFrame,
 
     # Drop records, where MOMENT not in [timestamp_from, timestamp_to)
     trades = trades.filter( \
-        (F.date_format("MOMENT", TIMESTAMP_SPARK) >= F.lit(candle_config.timestamp_from)) &
-        (F.date_format("MOMENT", TIMESTAMP_SPARK) < F.lit(candle_config.timestamp_to))
+        (F.date_format("MOMENT", DATE_FORMAT_SPARK) >= F.lit(candle_config.date_from)) &
+        (F.date_format("MOMENT", DATE_FORMAT_SPARK) < F.lit(candle_config.date_to)) &
+        (F.date_format("MOMENT", HHMM_FORMAT_SPARK) >= F.lit(candle_config.time_from)) &
+        (F.date_format("MOMENT", HHMM_FORMAT_SPARK) < F.lit(candle_config.time_to))
     )
 
     # Calculate timestamp of begin of candle
     trades = trades \
         .withColumn(
             "CANDLE_MOMENT",
+            # Timestamp of candle begin
             F.timestamp_millis(
-                F.unix_millis(
-                    F.date_trunc("day", "MOMENT")) + (
-                    (
-                        F.hour("MOMENT") * 3600 * 1000 +
-                        F.minute("MOMENT") * 60 * 1000 +
-                        F.second("MOMENT") * 1000 +
-                        F.date_format("MOMENT", "SSS").cast("int")
-                    )
-                    / candle_config.width_ms
-                ).cast("long") * candle_config.width_ms
+                # Time of candle begin in milliseconds
+                F.unix_millis(F.date_trunc("day", "MOMENT")) +
+                ((  # Get milliseconds count from begin of day
+                    F.hour("MOMENT") * 3600 * 1000 +
+                    F.minute("MOMENT") * 60 * 1000 +
+                    F.second("MOMENT") * 1000 +
+                    F.date_format("MOMENT", "SSS").cast("int")
+                ) / candle_config.width_ms).cast("long") * candle_config.width_ms
             )
         )
 
     # Repartition to ensure that records corresponding
     # to the same candle are in the same partition
-    trades.repartition(NUM_CORES, "#SYMBOL", "CANDLE_MOMENT")
+    trades = trades.repartition(NUM_CORES, "#SYMBOL", "CANDLE_MOMENT")
 
     # Calculate candles
     window_spec = Window \
@@ -229,53 +357,63 @@ def calculate_candles(trades: DataFrame,
     return candles
 
 
-def format_candle(candles: DataFrame) -> DataFrame:
+def format_candle(candles: DataFrame, config: Config) -> DataFrame:
     candles = candles \
-        .withColumn("MOMENT", F.date_format("MOMENT", TIMESTAMP_OUTPUT_SPARK)) \
+        .withColumn("SYMBOL", F.trim("SYMBOL")) \
+        .withColumn("MOMENT", F.trim(F.date_format("MOMENT", TIMESTAMP_OUTPUT_SPARK))) \
         .withColumn("OPEN", F.round("OPEN", 1)) \
         .withColumn("HIGH", F.round("HIGH", 1)) \
         .withColumn("LOW", F.round("LOW", 1)) \
         .withColumn("CLOSE", F.round("CLOSE", 1))
+
+    if config.sort_by_moment:
+        candles = candles.orderBy("MOMENT")
+
     return candles
 
 
 def save_candles(candles: DataFrame, config: Config):
 
-    candles = format_candle(candles)
-    symbols = [
-        row["SYMBOL"] for row in candles.select("SYMBOL").distinct().collect()
-    ]
+    candles = format_candle(candles, config)
+    try:
+        symbols = [
+            row["SYMBOL"]
+            for row in candles.select("SYMBOL").distinct().collect()
+        ]
 
-    if not os.path.isdir(config.outdir):
-        os.mkdir(config.outdir)
+        config.outdir.mkdir(exist_ok=True, parents=True)
 
-    if config.clean_output_dir:
-        shutil.rmtree(config.outdir)
-        os.mkdir(config.outdir)
+        if config.clean_output_dir:
+            shutil.rmtree(config.outdir)
+            config.outdir.mkdir(exist_ok=True, parents=True)
 
-    for symbol in symbols:
-        # Collect and write to files
-        candels_symbol = candles.filter(F.col("SYMBOL") == symbol).coalesce(1)
+        for symbol in symbols:
+            # Collect and write to files
+            candels_symbol = candles.filter( \
+                F.col("SYMBOL") == symbol
+            ).coalesce(1)
 
-        candels_symbol.write \
-                    .option("header", "false") \
-                    .mode("overwrite") \
-                    .csv(f"{config.outdir}/tmp_{symbol}")
+            candels_symbol.write \
+                        .option("header", "false") \
+                        .mode("overwrite") \
+                        .csv(f"{config.outdir}/tmp_{symbol}")
 
-        # Rename file
-        tmp_file = glob.glob(f"{config.outdir}/tmp_{symbol}/part-*.csv")[0]
-        os.rename(tmp_file, f"{config.outdir}/{symbol}.csv")
-        shutil.rmtree(f"{config.outdir}/tmp_{symbol}")
+            # Rename file
+            tmp_file = glob.glob(f"{config.outdir}/tmp_{symbol}/part-*.csv")[0]
+            os.rename(tmp_file, f"{config.outdir}/{symbol}.csv")
+            shutil.rmtree(f"{config.outdir}/tmp_{symbol}")
 
+    except Exception as e:
+        logger.exception("Save or calculation candles error: %s", e)
+        raise
+
+    logger.info("Candles saved successfully")
     pass
 
 
 def make_candles(config: Config):
     # Config SparkSession
-    spark = SparkSession.builder.appName("Candle Calculating").getOrCreate()
-
-    # PySpark version >= 3.0  does not allow parsing time written without delimiters
-    spark.conf.set("spark.sql.legacy.timeParserPolicy", "LEGACY")
+    spark = config_spark_session()
 
     # Creation dataframe
     trades = get_trades_dataframe(spark, config)
@@ -290,7 +428,16 @@ def make_candles(config: Config):
 
 
 if __name__ == "__main__":
-    args = parse_args()
-    config = Config(args)
+    try:
+        logger.info("Start application")
 
-    make_candles(config)
+        args = parse_args()
+        config = Config(args)
+
+        make_candles(config)
+
+        logger.info("Application finished successfully")
+
+    except Exception as e:
+        logger.exception("Application terminated with error")
+        exit(1)

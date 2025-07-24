@@ -1,22 +1,14 @@
 <configuration>
     <property>
         <name>candle.width</name>
-        <value>300000</value>
-    </property>
-    <property>
-        <name>candle.date.from</name>
-        <value>19000101</value>
-    </property>
-    <property>
-        <name>candle.date.to</name>
-        <value>20200101</value>
-        </property>
-    <property>
-        <name>candle.time.from</name>
         <value>1000</value>
     </property>
     <property>
-        <name>candle.time.to</name>
-        <value>1800</value>
-        </property>
+        <name>candle.date.from</name>
+        <value>20110101</value>
+    </property>
+    <property>
+        <name>candle.date.to</name>
+        <value>20110201</value>
+    </property>
 </configuration>
