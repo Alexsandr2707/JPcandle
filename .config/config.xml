@@ -12,11 +12,11 @@
         <value>20110201</value>
     </property>
     <property>
-        <name>candle.time.to</name>
-        <value>1100</value>
-    </property>
-     <property>
         <name>candle.time.from</name>
-        <value>1030</value>
+        <value>1000</value>
+    </property>
+    <property>
+        <name>candle.time.to</name>
+        <value>1800</value>
     </property>
 </configuration>

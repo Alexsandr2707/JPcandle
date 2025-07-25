@@ -16,6 +16,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import logging
+import time
 
 # Logging configuration
 DEF_LOG_DIR = "logs"
@@ -95,6 +96,7 @@ TIMESTAMP_SPARK = DATE_FORMAT_SPARK + " " + HHMM_FORMAT_SPARK
 
 # Num of aviable cores
 NUM_CORES = multiprocessing.cpu_count()
+MIN_PARTION_COUNT = NUM_CORES
 
 
 def parse_args():
@@ -291,7 +293,7 @@ def get_trades_dataframe(spark: SparkSession, config: Config) -> DataFrame:
                             header=True,
                             timestampFormat=TIMESTAMP_INPUT_SPARK)
 
-    trades = trades.repartition(NUM_CORES)
+    trades = trades.repartition(MIN_PARTION_COUNT)
 
     return trades
 
@@ -326,7 +328,7 @@ def calculate_candles(trades: DataFrame,
 
     # Repartition to ensure that records corresponding
     # to the same candle are in the same partition
-    trades = trades.repartition(NUM_CORES, "#SYMBOL", "CANDLE_MOMENT")
+    trades = trades.repartition(MIN_PARTION_COUNT, "#SYMBOL", "CANDLE_MOMENT")
 
     # Calculate candles
     window_spec = Window \
@@ -423,8 +425,17 @@ def make_candles(config: Config):
 
     # Calculation and saving
     logger.info("Start candle calculations")
-    save_candles(candles, config)
 
+    start_time = time.time()
+    try:
+        save_candles(candles, config)
+    except:
+        logger.exception("Candle calculation interrupted")
+        raise
+    finally:
+        end_time = time.time()
+        logger.info("Candle calculation completed in %.3f seconds",
+                    end_time - start_time)
     pass
 
 
