@@ -16,7 +16,7 @@ if [ ! -e "${CACHE}" ]; then
 fi
 
 if [ ! -e "${VENV}" ]; then 
-	python3 -m venv ${VENV}
+	${VENV_BUILDER} ${VENV}
 
 	# Specify path to Interpriter for vscode
 	(echo ""; echo "PYTHONPATH=${INTERP}") >> "${VSCODE_ENV}"

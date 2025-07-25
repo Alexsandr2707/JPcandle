@@ -221,7 +221,7 @@ class Config():
         self.sort_by_moment = args.get("sort_by_moment")
 
         if not self.database_csv_path.exists():
-            raise FileExistsError("Incorrect path to database: %s",
+            raise FileExistsError("Incorrect path to database",
                                   self.database_csv_path)
 
         logger.info("Config created successfully")

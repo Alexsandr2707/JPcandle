@@ -6,6 +6,7 @@ PYFILE=${SRC}/main.py
 CONFIGS=.config
 CONFIG_ENV=${CONFIGS}/config_env.sh
 
+VENV_BUILDER=p"ython3.12 -m venv"
 VENV=venv
 INTERP=${VENV}/bin/python
 REQUIREMENTS=${CONFIGS}/requirements.txt
