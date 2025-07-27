@@ -11,12 +11,4 @@
         <name>candle.date.to</name>
         <value>20110201</value>
     </property>
-    <property>
-        <name>candle.time.from</name>
-        <value>1000</value>
-    </property>
-    <property>
-        <name>candle.time.to</name>
-        <value>1800</value>
-    </property>
 </configuration>

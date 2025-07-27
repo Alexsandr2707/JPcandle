@@ -4,3 +4,5 @@ venv
 database-csv
 logs
 .env
+tests
+answers

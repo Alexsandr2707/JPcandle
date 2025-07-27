@@ -99,6 +99,17 @@ NUM_CORES = multiprocessing.cpu_count()
 MIN_PARTION_COUNT = NUM_CORES
 
 
+def try_remove_dir(dir: str):
+    for i in range(3):
+        try:
+            shutil.rmtree(dir)
+            break
+        except:
+            time.sleep(0.5)
+    else:
+        raise RuntimeError("Can't remove %s directory", dir)
+
+
 def parse_args():
     try:
         parser = argparse.ArgumentParser()
@@ -391,11 +402,11 @@ def save_candles(candles: DataFrame, config: Config):
 
         for symbol in symbols:
             # Collect and write to files
-            candels_symbol = candles.filter( \
+            candles_symbol = candles.filter( \
                 F.col("SYMBOL") == symbol
             ).coalesce(1)
 
-            candels_symbol.write \
+            candles_symbol.write \
                         .option("header", "false") \
                         .mode("overwrite") \
                         .csv(f"{config.outdir}/tmp_{symbol}")
@@ -403,7 +414,8 @@ def save_candles(candles: DataFrame, config: Config):
             # Rename file
             tmp_file = glob.glob(f"{config.outdir}/tmp_{symbol}/part-*.csv")[0]
             os.rename(tmp_file, f"{config.outdir}/{symbol}.csv")
-            shutil.rmtree(f"{config.outdir}/tmp_{symbol}")
+
+            try_remove_dir(f"{config.outdir}/tmp_{symbol}")
 
     except Exception as e:
         logger.exception("Save or calculation candles error: %s", e)
@@ -436,6 +448,8 @@ def make_candles(config: Config):
         end_time = time.time()
         logger.info("Candle calculation completed in %.3f seconds",
                     end_time - start_time)
+
+    spark.stop()
     pass
 
 
