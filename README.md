@@ -59,7 +59,7 @@ python main.py --sort-by-moment
 ```
 
 ### Рекомендованный способ запуска
-``` python
+```
 python main.py database-csv --outdir output_directory --config config_file.xml --clean-output-dir --sort-by-moment
 ```
 
