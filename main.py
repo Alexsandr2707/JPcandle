@@ -370,7 +370,7 @@ def calculate_candles(trades: DataFrame,
     return candles
 
 
-def format_candle(candles: DataFrame, config: Config) -> DataFrame:
+def format_candle(candles: DataFrame) -> DataFrame:
     candles = candles \
         .withColumn("SYMBOL", F.trim("SYMBOL")) \
         .withColumn("MOMENT", F.trim(F.date_format("MOMENT", TIMESTAMP_OUTPUT_SPARK))) \
@@ -379,15 +379,12 @@ def format_candle(candles: DataFrame, config: Config) -> DataFrame:
         .withColumn("LOW", F.round("LOW", 1)) \
         .withColumn("CLOSE", F.round("CLOSE", 1))
 
-    if config.sort_by_moment:
-        candles = candles.orderBy("MOMENT")
-
     return candles
 
 
 def save_candles(candles: DataFrame, config: Config):
 
-    candles = format_candle(candles, config)
+    candles = format_candle(candles)
     try:
         symbols = [
             row["SYMBOL"]
@@ -405,6 +402,9 @@ def save_candles(candles: DataFrame, config: Config):
             candles_symbol = candles.filter( \
                 F.col("SYMBOL") == symbol
             ).coalesce(1)
+
+            if config.sort_by_moment:
+                candles_symbol = candles_symbol.orderBy("MOMENT")
 
             candles_symbol.write \
                         .option("header", "false") \

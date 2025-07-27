@@ -27,7 +27,7 @@ INSTALLED_REQUIREMENTS=${CACHE}/requirements.txt.installed
 
 CONFIG_XML=${CONFIGS}/config.xml
 DATABASE_CSV=${SRC}/database-csv/input.csv
-OUTDIR=${SRC}/output
+OUTDIR=${SRC}/outputs
 CLEAN="--clean-output-dir"
 SORT="--sort-by-moment"
 
