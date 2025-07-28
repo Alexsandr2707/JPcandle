@@ -28,7 +28,7 @@ CONFIG=tests/config.xml
 MY_BRF1=output/BRF1.csv
 ANSWER_BRF1=answers/BRF1_correct.csv
 
-COUNT_TESTS=1
+COUNT_TESTS=5
 
 # Run program
 

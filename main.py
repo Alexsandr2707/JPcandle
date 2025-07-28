@@ -22,7 +22,7 @@ import time
 DEF_LOG_DIR = "logs"
 DEF_LOG_FILE = "app.log"
 DEF_LOG_FILE_SIZE = 10 * 1024 * 1024  # 10Mb
-DEF_BACKUP_COUNT = 1
+DEF_BACKUP_COUNT = 5
 DEF_LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 
 
@@ -146,7 +146,8 @@ class CandleConfig():
             date_from="19000101",  # yyyyMMdd
             date_to="20200101",  # yyyyMMdd
             time_from="1000",  # HHmm
-            time_to="1800"):  # HHmm
+            time_to="1800"  # HHmm
+    ):
 
         try:
             width_ms = str(params.get("candle.width", width_ms))
@@ -309,6 +310,8 @@ def get_trades_dataframe(spark: SparkSession, config: Config) -> DataFrame:
     return trades
 
 
+# Return candle dataframe with columns:
+# SYMBOL, MOMENT, OPEN, HIGH, LOW, CLOSE
 def calculate_candles(trades: DataFrame,
                       candle_config: CandleConfig) -> DataFrame:
 
@@ -383,8 +386,6 @@ def format_candle(candles: DataFrame) -> DataFrame:
 
 
 def save_candles(candles: DataFrame, config: Config):
-
-    candles = format_candle(candles)
     try:
         symbols = [
             row["SYMBOL"]
@@ -394,7 +395,7 @@ def save_candles(candles: DataFrame, config: Config):
         config.outdir.mkdir(exist_ok=True, parents=True)
 
         if config.clean_output_dir:
-            shutil.rmtree(config.outdir)
+            try_remove_dir(config.outdir)
             config.outdir.mkdir(exist_ok=True, parents=True)
 
         for symbol in symbols:
@@ -434,6 +435,9 @@ def make_candles(config: Config):
 
     # Calculate candles (lazy calculations)
     candles = calculate_candles(trades, config.candle_config)
+
+    # Format candles (lazy calculations)
+    candles = format_candle(candles)
 
     # Calculation and saving
     logger.info("Start candle calculations")
