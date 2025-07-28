@@ -392,6 +392,8 @@ def save_candles(candles: DataFrame, config: Config):
             for row in candles.select("SYMBOL").distinct().collect()
         ]
 
+        candles = candles.cache()
+
         config.outdir.mkdir(exist_ok=True, parents=True)
 
         if config.clean_output_dir:
