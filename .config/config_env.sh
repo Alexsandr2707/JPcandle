@@ -17,9 +17,7 @@ UTILS=utils
 BUILD_ENV=${UTILS}/build_env.sh
 ACTIVATE_VENV=${UTILS}/activate_venv.sh
 RUN_TESTS=${UTILS}/run_tests.sh
-RUN_STDIN=${UTILS}/run_stdin.sh
 RUN_DEFAULT=${UTILS}/run_default.sh
-CREATE_TEST=${UTILS}/create_test.sh  
 
 CACHE=.cache
 INSTALLED_REQUIREMENTS=${CACHE}/requirements.txt.installed

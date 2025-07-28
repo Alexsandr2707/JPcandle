@@ -12,13 +12,7 @@ clear:
 run: all clear
 	@${RUN_DEFAULT}
 
-run_tests:
+run_tests: all clear
 	@${RUN_TESTS}
-
-run_stdin: all clear
-	@${RUN_STDIN}
-
-create_test: clear
-	@${CREATE_TEST}
 
 
