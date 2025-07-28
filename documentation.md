@@ -47,9 +47,44 @@ parse_args() # Парсит аргументы командной строки
 Config(args) # Формирование объекта Config
 make_candles(config: Config) # Главная функция выполняет вычисление и сохранение свечей в файлы
 -- config_spark_session() -> SparkSession # Настраивает и создает спарк-сессию
--- get_trades_dataframe(spark: SparkSession, config: Config) -> DataFrame # Чтение базы данных и формирование датафрейма сделкок
+-- get_trades_dataframe(spark: SparkSession, config: Config) -> DataFrame # Чтение базы данных и формирование датафрейма сделок
 -- calculate_candles(trades: DataFrame, candle_config: CandleConfig) -> DataFrame # Выполняет все вычисления свечей, возвращает датафрейм свечей (ленивые)
 -- format_candle(candles: DataFrame) -> DataFrame # Выполняет форматирование свечей (округление полей, форматирование времени, триминг)
 -- save_candles(candles: DataFrame, config: Config) # Сохраняет свечи в файлы 
    -- try_remove_dir(dir: str) # Удаляет директорию и все поддиректории 
+```
+
+## Подробное описание функций отвечающих за расчет свечей 
+### `calculate_candles`
+Выполняет ленивые вычисления свечей, возвращает датафрейм свечей:
+1. Отфильтровывает записи сделок, которые не будут учавствовать в формировании свечей (те что не соответсвуют параметрам времени формирования свечей)
+2. Добавляет в таблицу сделок новый столбец "CANDLE_MOMENT", это вычисляемое поле сопоставляет каждой сделке время начала той свечи, которой оно соответствует. Оно уникальным образом индифицирует каждую свечу
+3. Выполняется repartition(MIN_PARTION_COUNT, "#SYMBOL", "CANDLE_MOMENT") датафрейма сделок. Таким образом все сделки соответствующие одной свече окажутся в одной партиции. Репартиционирование по "#SYMBOL" не является обязательным, однако мне показалось это уместным, для разбиения на более маленьки группы, а как следствие более равномерное разбиение всех сделок между партициями. Может как замедлить, так и ускорить выполнение программы
+4. Выполняется формирование статистик для каждой сделки: цены первой (колонка "OPEN") и последней (колонка "CLOSE") сделки по свечам, которым соответсвует каждая сделка, при помощи оконной функции
+``` python
+window_spec = Window \
+    .partitionBy("#SYMBOL", "CANDLE_MOMENT") \
+    .orderBy("MOMENT", "ID_DEAL")
+
+trade_stats = trades.select(
+    "#SYMBOL", \
+    "CANDLE_MOMENT", \
+    "PRICE_DEAL", \
+    F.first("PRICE_DEAL").over(window_spec).alias("OPEN"), \
+    F.last("PRICE_DEAL").over(window_spec).alias("CLOSE")
+)
+```
+
+5. К полученной таблице статистик приминяются агрегационные функции поика максимума и минимума свечей, результат этого действия - таблица свечей
+``` python
+candles = trade_stats \
+    .groupBy(
+        F.col("#SYMBOL").alias("SYMBOL"),
+        F.col("CANDLE_MOMENT").alias("MOMENT")) \
+    .agg(
+        F.first("OPEN").alias("OPEN"),
+        F.max("PRICE_DEAL").alias("HIGH"),
+        F.min("PRICE_DEAL").alias("LOW"),
+        F.last("CLOSE").alias("CLOSE")
+)
 ```
